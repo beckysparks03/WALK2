@@ -8,10 +8,11 @@ let mX = 0;
 let mY = 0;
 let lastLat, lastLon;
 
-let scaleFactor = 1;     // current scale
-let targetScale = 1;     // target scale to ease toward
-let maxDist = 0;         // meters from start
-let totalDist = 0;
+let scaleFactor = 1;   // current zoom
+let targetScale = 1;   // target zoom
+let maxDist = 0;       // farthest distance from start (m)
+let totalDist = 0;     // total path distance (m)
+let scaleMeters = 2.0; // how strongly to map GPS meters to canvas movement
 
 function setup() {
   // Maintain 4:5 aspect ratio
@@ -25,10 +26,12 @@ function setup() {
   background(120, 60, 50);
   smooth();
 
+  // Initialize balls
   for (let i = 0; i < big; i++) {
     bodies.push(new Ball());
   }
 
+  // Request GPS updates
   if ("geolocation" in navigator) {
     navigator.geolocation.watchPosition(updatePosition, gpsError, {
       enableHighAccuracy: true,
@@ -41,23 +44,27 @@ function setup() {
 }
 
 function draw() {
-  // Ease zoom smoothly toward targetScale
-  let easing = 0.05; // smaller = slower easing
+  // Smooth easing toward new zoom
+  let easing = 0.05;
   scaleFactor += (targetScale - scaleFactor) * easing;
 
-  // Camera transform (keep you centered)
+  // Transform camera (you always stay centered)
   push();
   translate(width / 2, height / 2);
   scale(scaleFactor);
   translate(-mX, -mY);
-  
-  for (let b of bodies) {
-    b.render();
-  }
+
+  // Render all balls
+  for (let b of bodies) b.render();
+
+  // Debug: show current position
+  noStroke();
+  fill(255, 0, 0);
+  ellipse(mX, mY, 20 / scaleFactor);
 
   pop();
 
-  // Optional info text
+  // Optional info overlay
   noStroke();
   fill(255);
   textSize(12);
@@ -69,29 +76,33 @@ function updatePosition(pos) {
   let lat = pos.coords.latitude;
   let lon = pos.coords.longitude;
 
+  console.log("GPS:", lat, lon);
+  document.title = `Lat: ${lat.toFixed(5)}, Lon: ${lon.toFixed(5)}`;
+
   if (lastLat === undefined) {
     lastLat = lat;
     lastLon = lon;
     return;
   }
 
-  // Approx. meters of movement
+  // Approx. movement in meters
   let dx = (lon - lastLon) * 111320 * cos(radians(lat));
   let dy = (lat - lastLat) * 110540;
   let stepDist = sqrt(dx * dx + dy * dy);
-  
-  if (stepDist < 1) return; // ignore small GPS jitter
 
-  // Move world position
-  mX += dx;
-  mY -= dy;
+  // Ignore extremely tiny GPS jitter (<0.2 m)
+  if (stepDist < 0.2) return;
+
+  // Move virtual world position
+  mX += dx * scaleMeters;
+  mY -= dy * scaleMeters;
 
   // Update distances
   totalDist += stepDist;
   let distFromStart = sqrt(mX * mX + mY * mY);
   if (distFromStart > maxDist) maxDist = distFromStart;
 
-  // Compute new target scale (maps 0–5km → 1–0.15)
+  // Target zoom (0 → 5 km → 1 → 0.15)
   targetScale = map(maxDist, 0, 5000, 1, 0.15, true);
 
   lastLat = lat;
