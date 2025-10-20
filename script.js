@@ -1,4 +1,4 @@
-// ---- Tunables / system ----
+// -------- Tunables / system --------
 let thold = 15;
 let spifac = 3.25;
 let drag = 0.01;
@@ -13,6 +13,9 @@ let targetScale = 1;    // target zoom (eased toward)
 let maxDist = 0;        // farthest distance from start (meters, mapped to zoom)
 let totalDist = 0;      // cumulative meters walked
 
+// Starts blank until movement is detected
+let hasMoved = false;
+
 // Mode settings (Indoor/Outdoor)
 let INDOOR = true;
 let scaleMeters = 20.0; // meters -> pixels multiplier (higher = more motion)
@@ -20,7 +23,7 @@ let minStep = 0.05;     // ignore GPS steps smaller than this (meters)
 let strokeAlpha = 120;  // particle stroke alpha
 let strokeW = 1.0;      // particle stroke weight
 
-// GPS breadcrumb trail (helps visualize your path)
+// Optional breadcrumb trail (kept, but hidden until movement)
 let trail = [];
 
 // DOM elements for mode & stats
@@ -33,10 +36,10 @@ function setup() {
   const c = createCanvas(w, h);
   c.parent('canvas-holder');
 
-  pixelDensity(1); // keeps strokes crisp on mobile
+  pixelDensity(1);
   applyModeStyling();
 
-  background(120, 60, 50);
+  background(0); // black bg
   smooth();
 
   for (let i = 0; i < big; i++) bodies.push(new Ball());
@@ -74,24 +77,19 @@ function draw() {
   scale(scaleFactor);
   translate(-mX, -mY);
 
-  // Draw breadcrumb trail under particles
-  if (trail.length > 1) {
+  // Draw breadcrumb trail (only after movement)
+  if (hasMoved && trail.length > 1) {
     push();
     noFill();
-    stroke(255, 255, 255, 150);
+    stroke(255, 255, 255, 110);
     beginShape();
     for (const p of trail) vertex(p.x, p.y);
     endShape();
     pop();
   }
 
-  // Render particle system (no fade — accumulates)
+  // Render particle system — draw lines ONLY after movement is detected
   for (const b of bodies) b.render();
-
-  // Debug: red dot at your current position
-  noStroke();
-  fill(255, 0, 0);
-  ellipse(mX, mY, 20 / scaleFactor);
 
   pop();
 
@@ -104,13 +102,13 @@ function updatePosition(pos) {
   const lat = pos.coords.latitude;
   const lon = pos.coords.longitude;
 
-  // Quick visual debug in tab title
+  // Quick visual debug in tab title (keep helpful)
   document.title = `Lat:${lat.toFixed(5)} Lon:${lon.toFixed(5)}`;
-  console.log("GPS:", lat, lon);
 
   if (lastLat === undefined) {
     lastLat = lat; lastLon = lon;
-    trail.push({ x: mX, y: mY }); // seed trail
+    // seed trail at start (but still not drawing until movement)
+    trail.push({ x: mX, y: mY });
     return;
   }
 
@@ -121,6 +119,9 @@ function updatePosition(pos) {
 
   // Ignore very tiny jitter
   if (stepDist < minStep) return;
+
+  // Once we pass the threshold at least once, allow drawing
+  hasMoved = true;
 
   // Move our world position (meters -> pixels)
   mX += dxMeters * scaleMeters;
@@ -143,7 +144,7 @@ function gpsError(err) {
   console.error("GPS error:", err);
 }
 
-// ---- Particles ----
+// -------- Particles --------
 class Ball {
   constructor() {
     this.X = random(-width / 2, width / 2);
@@ -154,29 +155,27 @@ class Ball {
   }
 
   render() {
-    // Attractive force toward mX,mY with anisotropy on Y via 'w'
+    // Always update the simulation…
     this.Xv += drag * (mX - this.X) * 20;
     this.Yv += drag * (mY - this.Y) * this.w;
-
-    // Damping
     this.Xv /= spifac;
     this.Yv /= spifac;
-
-    // Integrate
     this.X += this.Xv;
     this.Y += this.Yv;
 
-    // Draw trail segment
-    stroke(200, 255, 255, strokeAlpha);
-    strokeWeight(strokeW);
-    line(this.X, this.Y, this.pX, this.pY);
+    // …but ONLY draw lines once the user has actually moved.
+    if (hasMoved) {
+      stroke(200, 255, 255, strokeAlpha);
+      strokeWeight(strokeW);
+      line(this.X, this.Y, this.pX, this.pY);
+    }
 
-    // Save previous
+    // Update previous either way, so first drawn segment is tiny (no burst)
     this.pX = this.X; this.pY = this.Y;
   }
 }
 
-// ---- Mode switching & layout ----
+// -------- Mode switching & layout --------
 function setMode(indoor) {
   INDOOR = indoor;
   if (INDOOR) {
@@ -200,11 +199,27 @@ function setMode(indoor) {
     indoorBtn.setAttribute('aria-pressed', 'false');
     modeLabel.textContent = 'Mode: Outdoor';
   }
+
+  // Clear canvas & reset drawing so a fresh piece starts after the next movement
+  resetDrawing();
   applyModeStyling();
 }
 
+function resetDrawing() {
+  background(0);        // clear to black
+  hasMoved = false;     // start blank again
+  trail.length = 0;     // clear breadcrumb trail
+
+  // Re-randomize particles and reset their previous positions to avoid initial lines
+  for (const b of bodies) {
+    b.X = random(-width / 2, width / 2);
+    b.Y = random(-height / 2, height / 2);
+    b.Xv = 0; b.Yv = 0;
+    b.pX = b.X; b.pY = b.Y;
+  }
+}
+
 function applyModeStyling() {
-  // Apply drawing style immediately
   strokeWeight(strokeW);
   stroke(200, 255, 255, strokeAlpha);
 }
@@ -213,14 +228,16 @@ function windowResized() {
   const h = Math.min(windowHeight - barHeight(), windowWidth * 1.25);
   const w = h * 0.8;
   resizeCanvas(w, h);
+  // keep it clean on resize
+  background(0);
 }
 
 function barHeight() {
-  // Height of the sticky control bar (approx; keeps 4:5 space correct)
   const bar = document.querySelector('.bar');
   return bar ? bar.getBoundingClientRect().height : 56;
 }
 
-// Utility: degrees to radians (p5 has radians() but we also need Math.cos)
+// Utility: degrees to radians for Math.cos
 function radians(deg) { return (deg * Math.PI) / 180; }
+
 
