@@ -12,7 +12,14 @@ let scaleFactor = 1;   // current zoom
 let targetScale = 1;   // target zoom
 let maxDist = 0;       // farthest distance from start (m)
 let totalDist = 0;     // total path distance (m)
-let scaleMeters = 2.0; // how strongly to map GPS meters to canvas movement
+
+// 👉 Indoor tuning: boosts sensitivity & visibility for short walks
+const INDOOR = true;
+let scaleMeters = INDOOR ? 20.0 : 2.0;     // meters → pixels (higher reacts more)
+let minStep = INDOOR ? 0.05 : 0.2;         // ignore jitter below this (meters)
+
+// simple breadcrumb trail of your GPS path (for debugging + nice effect)
+let trail = [];
 
 function setup() {
   // Maintain 4:5 aspect ratio
@@ -20,18 +27,17 @@ function setup() {
   let w = h * 0.8;
   createCanvas(w, h);
   
-  strokeWeight(0.5);
-  stroke(200, 255, 255, 5);
+  // Make strokes more visible (indoor movement is subtle)
+  strokeWeight(INDOOR ? 1 : 0.5);
+  stroke(200, 255, 255, INDOOR ? 120 : 5);
   fill(200, 255, 255);
   background(120, 60, 50);
   smooth();
 
-  // Initialize balls
   for (let i = 0; i < big; i++) {
     bodies.push(new Ball());
   }
 
-  // Request GPS updates
   if ("geolocation" in navigator) {
     navigator.geolocation.watchPosition(updatePosition, gpsError, {
       enableHighAccuracy: true,
@@ -45,36 +51,50 @@ function setup() {
 
 function draw() {
   // Smooth easing toward new zoom
-  let easing = 0.05;
+  const easing = 0.05;
   scaleFactor += (targetScale - scaleFactor) * easing;
 
-  // Transform camera (you always stay centered)
+  // Camera — you stay centered
   push();
   translate(width / 2, height / 2);
   scale(scaleFactor);
   translate(-mX, -mY);
 
-  // Render all balls
+  // Draw your breadcrumb trail first (so particles draw over it)
+  if (trail.length > 1) {
+    push();
+    noFill();
+    stroke(255, 255, 255, 120);
+    beginShape();
+    for (let p of trail) vertex(p.x, p.y);
+    endShape();
+    pop();
+  }
+
+  // Render the particle system
   for (let b of bodies) b.render();
 
-  // Debug: show current position
+  // Debug: your current position
   noStroke();
   fill(255, 0, 0);
   ellipse(mX, mY, 20 / scaleFactor);
 
   pop();
 
-  // Optional info overlay
+  // HUD
   noStroke();
   fill(255);
   textSize(12);
   textAlign(LEFT, BOTTOM);
-  text(`Distance walked: ${(totalDist / 1000).toFixed(2)} km`, 10, height - 10);
+  text(
+    `Distance: ${(totalDist / 1000).toFixed(2)} km  |  Zoom: ${scaleFactor.toFixed(2)}  |  Indoor: ${INDOOR ? "on" : "off"}`,
+    10, height - 10
+  );
 }
 
 function updatePosition(pos) {
-  let lat = pos.coords.latitude;
-  let lon = pos.coords.longitude;
+  const lat = pos.coords.latitude;
+  const lon = pos.coords.longitude;
 
   console.log("GPS:", lat, lon);
   document.title = `Lat: ${lat.toFixed(5)}, Lon: ${lon.toFixed(5)}`;
@@ -82,24 +102,30 @@ function updatePosition(pos) {
   if (lastLat === undefined) {
     lastLat = lat;
     lastLon = lon;
+    // seed trail at start
+    trail.push({ x: mX, y: mY });
     return;
   }
 
-  // Approx. movement in meters
-  let dx = (lon - lastLon) * 111320 * cos(radians(lat));
-  let dy = (lat - lastLat) * 110540;
-  let stepDist = sqrt(dx * dx + dy * dy);
+  // Approx. meters moved
+  const dxMeters = (lon - lastLon) * 111320 * cos(radians(lat));
+  const dyMeters = (lat - lastLat) * 110540;
+  const stepDist = Math.hypot(dxMeters, dyMeters);
 
-  // Ignore extremely tiny GPS jitter (<0.2 m)
-  if (stepDist < 0.2) return;
+  // Ignore tiny GPS jitter
+  if (stepDist < minStep) return;
 
-  // Move virtual world position
-  mX += dx * scaleMeters;
-  mY -= dy * scaleMeters;
+  // Map meters → pixels (higher scaleMeters = more motion)
+  mX += dxMeters * scaleMeters;
+  mY -= dyMeters * scaleMeters;
 
-  // Update distances
+  // Record trail point
+  trail.push({ x: mX, y: mY });
+  if (trail.length > 5000) trail.shift(); // keep memory in check
+
+  // Distance stats & zoom target
   totalDist += stepDist;
-  let distFromStart = sqrt(mX * mX + mY * mY);
+  const distFromStart = Math.hypot(mX, mY);
   if (distFromStart > maxDist) maxDist = distFromStart;
 
   // Target zoom (0 → 5 km → 1 → 0.15)
@@ -143,3 +169,4 @@ function windowResized() {
   let w = h * 0.8;
   resizeCanvas(w, h);
 }
+
