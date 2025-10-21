@@ -1,43 +1,45 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>GPS Drawing</title>
-    <script src="https://cdn.jsdelivr.net/npm/p5@1.9.0/lib/p5.min.js"></script>
-    <script defer src="script.js"></script>
-    <style>
-      :root { --bar-bg: #0a0a0a; --bar-fg: #fff; --accent: #36d399; }
-      * { box-sizing: border-box; }
-      html, body { margin: 0; padding: 0; background: #000; color: var(--bar-fg); font-family: system-ui, Arial, sans-serif; }
-      .bar {
-        position: sticky; top: 0; z-index: 10;
-        display: flex; gap: .75rem; align-items: center; justify-content: space-between;
-        padding: .75rem 1rem; background: var(--bar-bg); border-bottom: 1px solid #222;
-      }
-      .group { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; }
-      .btn {
-        appearance: none; border: 1px solid #333; background: #141414; color: var(--bar-fg);
-        padding: .55rem .9rem; border-radius: .6rem; font-weight: 600; cursor: pointer;
-      }
-      .btn.active { border-color: var(--accent); color: #000; background: var(--accent); }
-      .stat { font-size: .9rem; opacity: .9; }
-      #canvas-holder { width: 100vw; height: calc(100vh - 56px); display: grid; place-items: center; background:#000; }
-    </style>
-  </head>
-  <body>
-    <div class="bar">
-      <div class="group">
-        <button id="indoorBtn" class="btn active" aria-pressed="true">Indoor</button>
-        <button id="outdoorBtn" class="btn" aria-pressed="false">Outdoor</button>
-      </div>
-      <div class="group stat">
-        <span id="modeLabel">Mode: Indoor</span> ·
-        <span id="distLabel">Distance: 0.00 km</span> ·
-        <span id="zoomLabel">Zoom: 1.00×</span>
-      </div>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Walk Painter</title>
+  <script src="https://cdn.jsdelivr.net/npm/p5@1.9.0/lib/p5.min.js"></script>
+  <script defer src="script.js"></script>
+  <style>
+    :root { --bar-bg:#0a0a0a; --bar-fg:#fff; --accent:#36d399; }
+    * { box-sizing:border-box; }
+    html,body { margin:0; padding:0; background:#000; color:var(--bar-fg); font-family:system-ui, Arial, sans-serif; }
+    .bar {
+      position:sticky; top:0; z-index:10;
+      display:flex; gap:.75rem; align-items:center; justify-content:space-between;
+      padding:.75rem 1rem; background:var(--bar-bg); border-bottom:1px solid #222;
+    }
+    .group { display:flex; gap:.5rem; align-items:center; flex-wrap:wrap; }
+    .btn {
+      appearance:none; border:1px solid #333; background:#141414; color:var(--bar-fg);
+      padding:.55rem .9rem; border-radius:.6rem; font-weight:600; cursor:pointer;
+    }
+    .btn.active { border-color:var(--accent); color:#000; background:var(--accent); }
+    .stat { font-size:.9rem; opacity:.9; }
+    #canvas-holder { width:100vw; height:calc(100vh - 56px); display:grid; place-items:center; background:#000; }
+  </style>
+</head>
+<body>
+  <div class="bar">
+    <div class="group">
+      <button id="indoorBtn" class="btn active" aria-pressed="true">Indoor</button>
+      <button id="outdoorBtn" class="btn" aria-pressed="false">Outdoor</button>
+      <button id="motionBtn" class="btn">Enable Motion</button>
+      <button id="endBtn" class="btn">End Walk</button>
+      <button id="clearBtn" class="btn">Restart</button>
     </div>
-    <div id="canvas-holder"></div>
-  </body>
+    <div class="group stat">
+      <span id="modeLabel">Mode: Indoor</span> ·
+      <span id="distLabel">Distance: 0.00 km</span> ·
+      <span id="zoomLabel">Zoom: 1.00×</span>
+    </div>
+  </div>
+  <div id="canvas-holder"></div>
+</body>
 </html>
-
